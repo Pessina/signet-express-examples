@@ -1,16 +1,13 @@
 const express = require('express');
-const { Server } = require('http');
 const dotenv = require('dotenv');
 
 // Load environment variables
 dotenv.config();
 
 // Import utilities
-const { useEnv } = require('./utils/useEnv');
 const { initNear } = require('./utils/initNear');
 const { initEvm } = require('./utils/initEvm');
-const { initChains } = require('./utils/chains');
-const { executeEvmTransaction } = require('./utils/evmTransactions');
+const { createSignRequestAndWaitSignature, createSignRequest } = require('./utils/evmTransactions');
 
 // Environment variables with fallback to 3001
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
@@ -22,18 +19,15 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/near', async (req, res) => {
+app.post('/near', async (req, res) => {
   try {
     const { chainSigContract } = await initNear({
       contractAddress: req.body.contractAddress
     });
-    const chains = initChains(chainSigContract);
 
     // Execute EVM transaction
-    const txHash = await executeEvmTransaction({
+    const txHash = await createSignRequestAndWaitSignature({
       chainSigContract,
-      evm: chains.evm,
-      predecessorId: useEnv().nearAccount,
     });
 
     res.json({ txHash });
@@ -45,17 +39,33 @@ app.get('/near', async (req, res) => {
   }
 });
 
-app.get('/evm', async (req, res) => {
+app.post('/evm', async (req, res) => {
   try {
-    const { chainSigContract, walletClient } = initEvm({
+    const { chainSigContract } = initEvm({
       contractAddress: req.body.contractAddress
     });
-    const chains = initChains(chainSigContract);
 
-    const txHash = await executeEvmTransaction({
+    const signature = await createSignRequestAndWaitSignature({
       chainSigContract,
-      evm: chains.evm,
-      predecessorId: walletClient.account.address,
+    });
+
+    res.json({ signature });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to execute EVM transaction',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+app.post('/evm_no_check', async (req, res) => {
+  try {
+    const { chainSigContract } = initEvm({
+      contractAddress: req.body.contractAddress
+    });
+
+    const txHash = await createSignRequest({
+      chainSigContract,
     });
 
     res.json({ txHash });
@@ -65,6 +75,18 @@ app.get('/evm', async (req, res) => {
       details: error instanceof Error ? error.message : String(error)
     });
   }
+});
+
+// TODO: replace with real calls
+
+app.post('/solana', async (req, res) => {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  res.status(200).send('OK');
+});
+
+app.post('/solana_no_check', async (req, res) => {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  res.status(200).send('OK');
 });
 
 // Error handling middleware

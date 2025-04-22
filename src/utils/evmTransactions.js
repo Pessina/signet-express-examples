@@ -1,43 +1,50 @@
-const executeEvmTransaction = async ({
+const { waitForTransactionReceipt } = require("viem/actions");
+
+const createSignRequestAndWaitSignature = async ({
   chainSigContract,
-  evm,
-  predecessorId,
 }) => {
-  const path = "eth";
-
-  const { address: from } = await evm.deriveAddressAndPublicKey(
-    predecessorId,
-    path
-  );
-
-  const { balance, decimals } = await evm.getBalance(from);
-  console.log({ from, balance, decimals });
-
-  const { transaction, hashesToSign } = await evm.prepareTransactionForSigning({
-    from: from,
-    to: "0x4174678c78fEaFd778c1ff319D5D326701449b25",
-    value: 1n,
-  });
-
   const rsvSignature = await chainSigContract.sign({
-    payload: hashesToSign[0],
-    path,
+    payload: new Uint8Array(Array(32).fill().map(() => Math.floor(Math.random() * 256))),
+    path: '',
     key_version: 0,
+  }, {
+    sign: {
+      algo: '',
+      dest: '',
+      params: '',
+    },
+    retry: {
+      delay: 10000,
+      retryCount: 12,
+    }
   });
 
-  if (!rsvSignature) {
-    throw new Error("Failed to sign transaction");
-  }
-
-  const tx = evm.attachTransactionSignature({
-    transaction,
-    rsvSignatures: [rsvSignature],
-  });
-
-  const txHash = await evm.broadcastTx(tx);
-
-  console.log({ txHash });
-  return txHash;
+  console.log({ rsvSignature });
+  return rsvSignature;
 };
 
-module.exports = { executeEvmTransaction }; 
+const createSignRequest = async ({
+  chainSigContract,
+}) => {
+  const signatureRequest = await chainSigContract.createSignatureRequest({
+    payload: new Uint8Array(Array(32).fill().map(() => Math.floor(Math.random() * 256))),
+    path: '',
+    key_version: 0,
+  }, {
+    sign: {
+      algo: '',
+      dest: '',
+      params: '',
+    },
+  });
+
+  const txReceipt = await waitForTransactionReceipt({
+    client: publicClient,
+    hash: signatureRequest.txHash,
+  });
+
+  console.log({ signatureRequest });
+  return signatureRequest;
+};
+
+module.exports = { createSignRequestAndWaitSignature, createSignRequest }; 
